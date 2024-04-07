@@ -16,10 +16,6 @@ import (
 	"net/http"
 
 	//http "github.com/bogdanfinn/fhttp"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
-	"github.com/joho/godotenv"
 	"io"
 	"net/url"
 	"os"
@@ -27,6 +23,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
+	"github.com/joho/godotenv"
 )
 
 var BaseURL string
@@ -53,7 +54,7 @@ var (
 	connPool            = map[string][]*connInfo{}
 	poolMutex           = sync.Mutex{}
 	TurnStilePool       = map[string]*TurnStile{}
-	userAgent           = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+	userAgent           = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.0.0 Safari/537.36"
 )
 
 func getWSURL(client httpclient.AuroraHttpClient, token string, retry int) (string, error) {
@@ -225,14 +226,14 @@ func InitTurnStile(client httpclient.AuroraHttpClient, secret *tokens.Secret, pr
 		defer response.Body.Close()
 		if response.StatusCode != 200 && retry > 0 {
 			return InitTurnStile(client, secret, proxy, retry-1)
-		} else if retry <= 0 {
-			return nil, response.StatusCode, errors.New("response status code is not 200")
 		}
 		var result chatgpt_types.RequirementsResponse
 		if err := json.NewDecoder(response.Body).Decode(&result); err != nil && retry > 0 {
 			return InitTurnStile(client, secret, proxy, retry-1)
-		} else if err != nil && retry <= 0 {
-			return nil, response.StatusCode, err
+		}
+		//  retry stop
+		if retry <= 0 {
+			return nil, response.StatusCode, errors.New("retry limit exceeded")
 		}
 		currTurnToken = &TurnStile{
 			TurnStileToken: result.Token,
@@ -355,6 +356,10 @@ func POSTconversation(client httpclient.AuroraHttpClient, message chatgpt_types.
 	response, err := client.Request(http.MethodPost, apiUrl, header, nil, bytes.NewBuffer(body_json))
 	if err != nil && retry > 0 {
 		return POSTconversation(client, message, secret, chat_token, proxy, retry-1)
+	}
+	//  retry stop
+	if retry <= 0 {
+		return nil, errors.New("retry limit exceeded")
 	}
 	return response, err
 }
@@ -636,8 +641,8 @@ func Handler(c *gin.Context, response *http.Response, client httpclient.AuroraHt
 					attr := urlAttrMap[citation.Metadata.URL]
 					if attr == "" {
 						u, _ := url.Parse(citation.Metadata.URL)
-						baseURL := u.Scheme + "://" + u.Host + "/"
-						attr = getURLAttribution(client, secret.Token, secret.PUID, baseURL)
+						BaseURL := u.Scheme + "://" + u.Host + "/"
+						attr = getURLAttribution(client, secret.Token, secret.PUID, BaseURL)
 						if attr != "" {
 							urlAttrMap[citation.Metadata.URL] = attr
 						}
@@ -692,15 +697,15 @@ func Handler(c *gin.Context, response *http.Response, client httpclient.AuroraHt
 				waitSource = true
 				continue
 			}
+		endProcess:
 			isRole = false
 			if stream {
 				_, err = c.Writer.WriteString(response_string)
 				if err != nil {
 					return "", nil
 				}
+				c.Writer.Flush()
 			}
-		endProcess:
-			c.Writer.Flush()
 
 			if original_response.Message.Metadata.FinishDetails != nil {
 				if original_response.Message.Metadata.FinishDetails.Type == "max_tokens" {
