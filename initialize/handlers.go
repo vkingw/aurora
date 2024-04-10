@@ -171,7 +171,6 @@ func (h *Handler) nightmare(c *gin.Context) {
 
 	uid := uuid.NewString()
 	client := bogdanfinn.NewStdClient()
-
 	turnStile, status, err := chatgpt.InitTurnStile(client, secret, proxyUrl)
 	if err != nil {
 		c.JSON(status, gin.H{
@@ -198,7 +197,7 @@ func (h *Handler) nightmare(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(500, gin.H{
-			"error": "error sending request",
+			"error": "request conversion error",
 		})
 		return
 	}
@@ -231,7 +230,7 @@ func (h *Handler) nightmare(c *gin.Context) {
 
 		if err != nil {
 			c.JSON(500, gin.H{
-				"error": "error sending request",
+				"error": "request conversion error",
 			})
 			return
 		}
