@@ -6,11 +6,6 @@ on:
       - main
     tags:
       - 'v*'
-    paths-ignore:
-      - 'README.md'
-  release:
-    types: [published]
-  workflow_dispatch:
 
 env:
   DOCKER_NAME: "vincentking/aurora"
